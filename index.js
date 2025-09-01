@@ -5,7 +5,7 @@ const path = require('path');
 const QRCode = require('qrcode');
 
 const app = express();
-const port = process.env.PORT || 3000;
+const port = process.env.PORT || 80;
 
 // Parse command line arguments
 const args = process.argv.slice(2);
@@ -13,6 +13,7 @@ let maxBase32Length = 6; // Default for QR Version 1 with M error correction
 let qrErrorCorrection = 'M'; // Default error correction level
 let qrVersion = 1; // Default to version 1
 let qrMode = 'alphanumeric'; // Default encoding mode
+let qrDomain = 'qr.local'; // Default domain for QR codes
 
 // Parse arguments
 for (let i = 0; i < args.length; i++) {
@@ -38,6 +39,12 @@ for (let i = 0; i < args.length; i++) {
       process.exit(1);
     }
     qrMode = qrMode.toLowerCase();
+  } else if (arg === '--qr-domain' || arg === '-d') {
+    qrDomain = args[++i] || 'qr.local';
+    if (!qrDomain || qrDomain.length === 0) {
+      console.error('QR domain cannot be empty');
+      process.exit(1);
+    }
   } else if (arg === '--help' || arg === '-h') {
     console.log(`
 QR Local - URL Shortener with QR Code Generation
@@ -51,12 +58,14 @@ QR Code Options:
   -e, --qr-error <L|M|Q|H>     Error correction level (default: M)
   -v, --qr-version <1-40>      QR code version (default: 1)
   -m, --qr-mode <mode>         Encoding mode: numeric, alphanumeric, byte (default: alphanumeric)
+  -d, --qr-domain <domain>     Domain for QR codes (default: qr.local)
   -h, --help                   Show this help message
 
 Examples:
   node index.js 6                           # Default settings
   node index.js 14 -e H -v 2                # Version 2 with high error correction
   node index.js 10 -m byte -e L             # Byte mode with low error correction
+  node index.js 8 -d mysite.com             # Custom domain for QR codes
     `);
     process.exit(0);
   } else if (!isNaN(parseInt(arg))) {
@@ -72,7 +81,7 @@ Examples:
 }
 
 console.log(`Using base32 ID length: ${maxBase32Length} characters`);
-console.log(`QR Code settings: Error correction=${qrErrorCorrection}, Version=${qrVersion}, Mode=${qrMode}`);
+console.log(`QR Code settings: Error correction=${qrErrorCorrection}, Version=${qrVersion}, Mode=${qrMode}, Domain=${qrDomain}`);
 
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
@@ -312,7 +321,7 @@ app.get('/human/browse', (req, res) => {
                 <img src="/qr/${row.id}/png" alt="QR Code" class="qr-code" onclick="downloadQR('${row.id}')" title="Click to download QR code">
               </div>
             </td>
-            <td><span class="qr-link">qr.local/${row.id}</span></td>
+            <td><span class="qr-link">${qrDomain}/${row.id}</span></td>
             <td><a href="${row.url}" target="_blank">${row.url}</a></td>
             <td class="stats">${created}</td>
             <td class="stats">${row.visits}</td>
@@ -404,7 +413,7 @@ app.post('/api/add', async (req, res) => {
           return res.status(500).json({ error: 'Database error' });
         }
         
-        const qrUrl = `qr.local/${id}`;
+        const qrUrl = `${qrDomain}/${id}`;
         
         if (req.headers.accept && req.headers.accept.includes('application/json')) {
           res.json({
@@ -473,7 +482,7 @@ app.get('/api/check', (req, res) => {
       
       res.json({
         exists: true,
-        qr_url: `qr.local/${row.id}`,
+        qr_url: `${qrDomain}/${row.id}`,
         base32_id: row.id,
         original_url: row.url,
         created: created.toISOString(),
@@ -505,7 +514,7 @@ app.get('/qr/:id/png', async (req, res) => {
     }
     
     try {
-      const qrUrl = `qr.local/${row.id}`;
+      const qrUrl = `${qrDomain}/${row.id}`;
       const qrCode = await generateQRCode(qrUrl, 'png');
       
       // Convert data URL to buffer for PNG
@@ -539,7 +548,7 @@ app.get('/download/qr/:id/png', async (req, res) => {
     }
     
     try {
-      const qrUrl = `qr.local/${row.id}`;
+      const qrUrl = `${qrDomain}/${row.id}`;
       const qrCode = await generateQRCode(qrUrl, format.toLowerCase());
       
       if (format.toLowerCase() === 'svg') {
@@ -579,7 +588,7 @@ app.get('/download/qr/:id/svg', async (req, res) => {
     }
     
     try {
-      const qrUrl = `qr.local/${row.id}`;
+      const qrUrl = `${qrDomain}/${row.id}`;
       const qrCode = await generateQRCode(qrUrl, format);
       
       res.setHeader('Content-Type', 'image/svg+xml');

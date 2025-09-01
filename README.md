@@ -1,10 +1,13 @@
 # QR Local - URL Shortener for Local Networks
 
-QR Local is a Node.js application designed to create short, QR code-friendly URLs for local network access. It uses base32 encoding to ensure QR codes can utilize alphanumeric mode for optimal space efficiency.
+QR Local is a Node.js application designed to create short, QR code-friendly URLs for local network access at the `qr.local` domain. It uses base32 encoding to ensure QR codes can utilize alphanumeric mode for optimal space efficiency.
 
 ## Features
 
 - **Base32 URL shortening** optimized for QR codes
+- **QR Code Generation** with configurable error correction, version, and encoding
+- **Visual QR codes** displayed in browse interface with click-to-download
+- **Multiple download formats** (PNG and SVG)
 - **Configurable ID length** to control QR code versions
 - **SQLite database** for persistent storage
 - **Visit tracking** with statistics
@@ -22,39 +25,68 @@ QR Local is a Node.js application designed to create short, QR code-friendly URL
    ```
 3. Start the server:
    ```bash
-   node index.js [max_base32_length]
+   node index.js [base32_length] [options]
    ```
 
-### Base32 Length Configuration
+### Configuration Options
 
-The server accepts an optional command line argument to set the maximum base32 ID length:
+**Command Line Arguments:**
+- `base32_length` - Maximum length for base32 IDs (1-20, default: 6)
 
+**QR Code Options:**
+- `-e, --qr-error <L|M|Q|H>` - Error correction level (default: M)
+- `-v, --qr-version <1-40>` - QR code version (default: 1)  
+- `-m, --qr-mode <mode>` - Encoding mode: numeric, alphanumeric, byte (default: alphanumeric)
+- `-d, --qr-domain <domain>` - Domain for QR code URLs (default: qr.local)
+- `-h, --help` - Show help message
+
+**Usage Examples:**
 ```bash
-# For QR Version 1 with Q error correction (7 characters max)
-node index.js 7
-
-# For QR Version 2 with Q error correction (14 characters max)  
-node index.js 14
-
-# For QR Version 3 with Q error correction (22 characters max)
-node index.js 22
-
-# Default (7 characters)
+# Default settings (6 chars, Version 1, M error correction, alphanumeric, qr.local domain)
 node index.js
+
+# Custom base32 length with default QR settings
+node index.js 10
+
+# Custom domain for QR codes (server still runs on default port 80)
+node index.js 6 -d mysite.com
+
+# Custom domain with port in QR codes (port is just URL prefix, not server port)
+node index.js 6 -d mysite.com:8080
+
+# Server on custom port with matching domain configuration
+PORT=8080 node index.js 6 -d mysite.com:8080
+
+# High error correction with Version 2 and custom domain
+node index.js 14 -e H -v 2 -d short.ly
+
+# Full custom configuration
+PORT=3000 node index.js 8 -m byte -e L -d example.org:3000
 ```
 
-**QR Code Capacity Reference:**
-- Version 1 + Q correction = 7 base32 chars max
-- Version 2 + Q correction = 14 base32 chars max  
-- Version 3 + Q correction = 22 base32 chars max
+### QR Code Domain Configuration
+
+**Important:** The `--qr-domain` option only affects the URLs embedded in generated QR codes. It does not change how the server operates or what port it binds to.
+
+- **QR Domain**: Controls the URL prefix in QR codes (e.g., `mysite.com/abc123`)
+- **Server Port**: Set via `PORT` environment variable (default: 80)
+- **Server Function**: Operates independently of QR domain setting
+
+**Examples:**
+- QR codes contain `mysite.com:8080/abc123` but server runs on port 3000: `PORT=3000 node index.js -d mysite.com:8080`
+- QR codes contain `qr.local/abc123` but server runs on port 8080: `PORT=8080 node index.js`
+
+**Note:** QR code capacity varies by version and error correction level. The domain prefix length affects available space for base32 IDs.
 
 ## API Documentation
 
 ### Base URL
 All API endpoints are prefixed with your server's base URL:
 ```
-http://localhost:3000/api/
+http://qr.local/api/
 ```
+
+*Note: For development/testing, you can use `http://localhost:3000/api/`*
 
 ### Authentication
 Currently, no authentication is required for API access.
@@ -98,12 +130,12 @@ Create a new URL redirect with optional custom key.
 **cURL Example:**
 ```bash
 # Auto-generate key
-curl -X POST http://localhost:3000/api/add \
+curl -X POST http://qr.local/api/add \
   -H "Content-Type: application/json" \
   -d '{"url": "https://example.com"}'
 
 # Use custom key
-curl -X POST http://localhost:3000/api/add \
+curl -X POST http://qr.local/api/add \
   -H "Content-Type: application/json" \
   -d '{"url": "https://example.com", "key": "GITHUB"}'
 ```
@@ -151,7 +183,7 @@ Check if a URL already has a redirect and return its details.
 
 **cURL Example:**
 ```bash
-curl "http://localhost:3000/api/check?url=https://example.com"
+curl "http://qr.local/api/check?url=https://example.com"
 ```
 
 ---
@@ -181,7 +213,7 @@ Delete an existing redirect by its base32 ID.
 
 **cURL Example:**
 ```bash
-curl -X DELETE http://localhost:3000/api/delete/abc123d
+curl -X DELETE http://qr.local/api/delete/abc123d
 ```
 
 ---
@@ -202,10 +234,61 @@ Follow a redirect to its destination URL.
 
 **Browser Example:**
 ```
-http://localhost:3000/abc123d
+http://qr.local/abc123d
 ```
 
 **Note:** This endpoint automatically increments the visit counter and updates the last visit timestamp.
+
+---
+
+### 5. Get QR Code Image
+
+Display a QR code image for a redirect.
+
+**Endpoint:** `GET /qr/:id/png`
+
+**URL Parameters:**
+- `id` - The base32 ID of the redirect
+
+**Success Response:** PNG image of QR code
+
+**Error Response:** 
+- `404` - Redirect not found
+- `500` - QR generation error
+
+**Browser Example:**
+```
+http://qr.local/qr/abc123d/png
+```
+
+**Note:** This endpoint returns the QR code as a PNG image for inline display. Images are cached for 24 hours.
+
+---
+
+### 6. Download QR Code
+
+Download a QR code file for a redirect.
+
+**Endpoints:** 
+- `GET /download/qr/:id/png` - Download PNG format
+- `GET /download/qr/:id/svg` - Download SVG format
+
+**URL Parameters:**
+- `id` - The base32 ID of the redirect
+
+**Success Response:** File download with appropriate Content-Disposition headers
+
+**Error Response:** 
+- `404` - Redirect not found
+- `500` - QR generation error
+
+**Browser Examples:**
+```
+http://qr.local/download/qr/abc123d/png
+http://qr.local/download/qr/abc123d/svg
+```
+
+**Note:** These endpoints trigger file downloads with filenames like `qr-abc123d.png` or `qr-abc123d.svg`.
 
 ---
 
@@ -215,12 +298,15 @@ The application provides a user-friendly web interface:
 
 ### Human-Readable URLs
 
-- **Add Redirect:** `http://localhost:3000/human/add`
+- **Add Redirect:** `http://qr.local/human/add`
   - Form to create new redirects with optional custom keys
   - Real-time validation and feedback
 
-- **Browse Redirects:** `http://localhost:3000/human/browse`  
+- **Browse Redirects:** `http://qr.local/human/browse`  
   - Table view of all redirects with statistics
+  - Visual QR codes displayed inline (80x80px)
+  - Click QR codes to download PNG files
+  - Download QR buttons for easy access
   - Delete buttons with confirmation dialogs
   - Sortable by creation date (newest first)
 
@@ -267,7 +353,7 @@ CREATE TABLE redirects (
 ### 1. Basic URL Shortening
 ```bash
 # Create short URL
-curl -X POST http://localhost:3000/api/add \
+curl -X POST http://qr.local/api/add \
   -H "Content-Type: application/json" \
   -d '{"url": "https://very-long-url.example.com/path/to/resource"}'
 
@@ -277,10 +363,10 @@ curl -X POST http://localhost:3000/api/add \
 ### 2. Custom Key Workflow
 ```bash
 # Check if URL already exists
-curl "http://localhost:3000/api/check?url=https://github.com/myrepo"
+curl "http://qr.local/api/check?url=https://github.com/myrepo"
 
 # If not found, create with custom key
-curl -X POST http://localhost:3000/api/add \
+curl -X POST http://qr.local/api/add \
   -H "Content-Type: application/json" \
   -d '{"url": "https://github.com/myrepo", "key": "GITHUB"}'
 
@@ -290,10 +376,10 @@ curl -X POST http://localhost:3000/api/add \
 ### 3. Redirect Management
 ```bash
 # List all redirects (via web interface)
-open http://localhost:3000/human/browse
+open http://qr.local/human/browse
 
 # Delete specific redirect
-curl -X DELETE http://localhost:3000/api/delete/GITHUB
+curl -X DELETE http://qr.local/api/delete/GITHUB
 ```
 
 ---
@@ -353,6 +439,7 @@ qrlocal/
 - `express` - Web framework
 - `sqlite3` - Database driver  
 - `base32` - Base32 encoding/decoding
+- `qrcode` - QR code generation library
 
 ### Scripts
 ```bash
