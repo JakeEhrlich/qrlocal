@@ -261,8 +261,7 @@ Display a QR code image for a redirect.
 http://qr.local/qr/abc123d/png
 ```
 
-**Note:** This endpoint returns the QR code as a PNG image for inline display. Images are cached for 24 hours.
-
+**Note:** This endpoint returns the QR code as a PNG image for inline display.
 ---
 
 ### 6. Download QR Code
