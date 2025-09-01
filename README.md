@@ -448,7 +448,3 @@ npm run dev   # Start server (same as start)
 ```
 
 ---
-
-## License
-
-ISC License - See package.json for details.
