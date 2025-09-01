@@ -1,8 +1,26 @@
+// Handle uncaught exceptions and rejections
+process.on('uncaughtException', (error) => {
+  console.error('Uncaught Exception:', error);
+  console.error('Stack trace:', error.stack);
+  process.exit(1);
+});
+
+process.on('unhandledRejection', (reason, promise) => {
+  console.error('Unhandled Rejection at:', promise, 'reason:', reason);
+  console.error('Stack trace:', reason.stack || reason);
+  process.exit(1);
+});
+
+console.log('Starting QR Local...');
+console.log('Loading dependencies...');
+
 const express = require('express');
 const base32 = require('base32');
 const sqlite3 = require('sqlite3').verbose();
 const path = require('path');
 const QRCode = require('qrcode');
+
+console.log('Dependencies loaded, initializing app...');
 
 const app = express();
 const port = process.env.PORT || 80;
@@ -82,6 +100,7 @@ Examples:
 
 console.log(`Using base32 ID length: ${maxBase32Length} characters`);
 console.log(`QR Code settings: Error correction=${qrErrorCorrection}, Version=${qrVersion}, Mode=${qrMode}, Domain=${qrDomain}`);
+console.log('Setting up middleware...');
 
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
@@ -103,8 +122,10 @@ function initDatabase() {
   });
 }
 
+console.log('Initializing database...');
 initDatabase();
 
+console.log('Setting up QR code generation utility...');
 // QR Code generation utility
 async function generateQRCode(text, format = 'png') {
   const options = {
@@ -636,8 +657,9 @@ app.delete('/api/delete/:id', (req, res) => {
   });
 });
 
+console.log(`Starting server on port ${port}...`);
 app.listen(port, () => {
-  console.log(`QR Local server running at http://localhost:${port}`);
+  console.log(`✓ QR Local server running at http://localhost:${port}`);
   console.log(`Add redirects at: http://localhost:${port}/human/add`);
   console.log(`Browse redirects at: http://localhost:${port}/human/browse`);
 });
