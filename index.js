@@ -434,7 +434,7 @@ app.post('/api/add', async (req, res) => {
           return res.status(500).json({ error: 'Database error' });
         }
         
-        const qrUrl = `${qrDomain}:80/${id}`;
+        const qrUrl = `http://${qrDomain}/${id}`;
         
         if (req.headers.accept && req.headers.accept.includes('application/json')) {
           res.json({
@@ -535,7 +535,7 @@ app.get('/qr/:id/png', async (req, res) => {
     }
     
     try {
-      const qrUrl = `${qrDomain}:80/${row.id}`;
+      const qrUrl = `http://${qrDomain}/${row.id}`;
       const qrCode = await generateQRCode(qrUrl, 'png');
       
       // Convert data URL to buffer for PNG
@@ -569,7 +569,7 @@ app.get('/download/qr/:id/png', async (req, res) => {
     }
     
     try {
-      const qrUrl = `${qrDomain}:80/${row.id}`;
+      const qrUrl = `http://${qrDomain}/${row.id}`;
       const qrCode = await generateQRCode(qrUrl, format.toLowerCase());
       
       if (format.toLowerCase() === 'svg') {
@@ -609,7 +609,7 @@ app.get('/download/qr/:id/svg', async (req, res) => {
     }
     
     try {
-      const qrUrl = `${qrDomain}:80/${row.id}`;
+      const qrUrl = `http://${qrDomain}/${row.id}`;
       const qrCode = await generateQRCode(qrUrl, format);
       
       res.setHeader('Content-Type', 'image/svg+xml');
