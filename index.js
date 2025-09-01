@@ -2,25 +2,77 @@ const express = require('express');
 const base32 = require('base32');
 const sqlite3 = require('sqlite3').verbose();
 const path = require('path');
+const QRCode = require('qrcode');
 
 const app = express();
 const port = process.env.PORT || 3000;
 
-// Parse command line arguments for base32 ID length
+// Parse command line arguments
 const args = process.argv.slice(2);
 let maxBase32Length = 7; // Default for QR Version 1 with Q error correction
+let qrErrorCorrection = 'Q'; // Default error correction level
+let qrVersion = null; // Auto-detect version by default
+let qrMode = 'alphanumeric'; // Default encoding mode
 
-if (args.length > 0) {
-  const length = parseInt(args[0]);
-  if (length > 0 && length <= 20) {
-    maxBase32Length = length;
-  } else {
-    console.error('Base32 length must be between 1 and 20');
-    process.exit(1);
+// Parse arguments
+for (let i = 0; i < args.length; i++) {
+  const arg = args[i];
+  
+  if (arg === '--qr-error' || arg === '-e') {
+    qrErrorCorrection = args[++i] || 'Q';
+    if (!['L', 'M', 'Q', 'H'].includes(qrErrorCorrection.toUpperCase())) {
+      console.error('Error correction must be L, M, Q, or H');
+      process.exit(1);
+    }
+    qrErrorCorrection = qrErrorCorrection.toUpperCase();
+  } else if (arg === '--qr-version' || arg === '-v') {
+    qrVersion = parseInt(args[++i]);
+    if (!qrVersion || qrVersion < 1 || qrVersion > 40) {
+      console.error('QR version must be between 1 and 40');
+      process.exit(1);
+    }
+  } else if (arg === '--qr-mode' || arg === '-m') {
+    qrMode = args[++i] || 'alphanumeric';
+    if (!['numeric', 'alphanumeric', 'byte'].includes(qrMode.toLowerCase())) {
+      console.error('QR mode must be numeric, alphanumeric, or byte');
+      process.exit(1);
+    }
+    qrMode = qrMode.toLowerCase();
+  } else if (arg === '--help' || arg === '-h') {
+    console.log(`
+QR Local - URL Shortener with QR Code Generation
+
+Usage: node index.js [base32_length] [options]
+
+Arguments:
+  base32_length         Maximum length for base32 IDs (1-20, default: 7)
+
+QR Code Options:
+  -e, --qr-error <L|M|Q|H>     Error correction level (default: Q)
+  -v, --qr-version <1-40>      QR code version (default: auto)
+  -m, --qr-mode <mode>         Encoding mode: numeric, alphanumeric, byte (default: alphanumeric)
+  -h, --help                   Show this help message
+
+Examples:
+  node index.js 7                           # Default settings
+  node index.js 14 -e H -v 2                # Version 2 with high error correction
+  node index.js 10 -m byte -e L             # Byte mode with low error correction
+    `);
+    process.exit(0);
+  } else if (!isNaN(parseInt(arg))) {
+    // First numeric argument is base32 length
+    const length = parseInt(arg);
+    if (length > 0 && length <= 20) {
+      maxBase32Length = length;
+    } else {
+      console.error('Base32 length must be between 1 and 20');
+      process.exit(1);
+    }
   }
 }
 
 console.log(`Using base32 ID length: ${maxBase32Length} characters`);
+console.log(`QR Code settings: Error correction=${qrErrorCorrection}, Version=${qrVersion || 'auto'}, Mode=${qrMode}`);
 
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
@@ -43,6 +95,45 @@ function initDatabase() {
 }
 
 initDatabase();
+
+// QR Code generation utility
+async function generateQRCode(text, format = 'png') {
+  const options = {
+    errorCorrectionLevel: qrErrorCorrection,
+    type: format === 'svg' ? 'svg' : 'png',
+    quality: 0.92,
+    margin: 1,
+    color: {
+      dark: '#000000',
+      light: '#FFFFFF'
+    }
+  };
+  
+  // Set version if specified
+  if (qrVersion) {
+    options.version = qrVersion;
+  }
+  
+  // Set mode based on content and user preference
+  if (qrMode === 'numeric' && /^\d+$/.test(text)) {
+    options.mode = 'numeric';
+  } else if (qrMode === 'alphanumeric' && /^[A-Z0-9 $%*+\-./:]*$/i.test(text)) {
+    options.mode = 'alphanumeric';
+  } else {
+    options.mode = 'byte';
+  }
+  
+  try {
+    if (format === 'svg') {
+      return await QRCode.toString(text, options);
+    } else {
+      return await QRCode.toDataURL(text, options);
+    }
+  } catch (error) {
+    console.error('QR Code generation error:', error);
+    throw error;
+  }
+}
 
 async function generateBase32Id(url) {
   let attempts = 0;
@@ -151,8 +242,13 @@ app.get('/human/browse', (req, res) => {
           th { background: #f5f5f5; font-weight: bold; }
           .qr-link { font-family: monospace; background: #f0f0f0; padding: 2px 6px; border-radius: 3px; }
           .stats { color: #666; font-size: 0.9em; }
-          .delete-btn { background: #dc3545; color: white; border: none; padding: 5px 10px; border-radius: 3px; cursor: pointer; font-size: 0.8em; }
+          .qr-container { text-align: center; }
+          .qr-code { width: 80px; height: 80px; cursor: pointer; border: 1px solid #ddd; border-radius: 4px; }
+          .qr-code:hover { border-color: #007cba; box-shadow: 0 0 5px rgba(0,124,186,0.3); }
+          .delete-btn { background: #dc3545; color: white; border: none; padding: 5px 10px; border-radius: 3px; cursor: pointer; font-size: 0.8em; margin-right: 5px; }
           .delete-btn:hover { background: #c82333; }
+          .download-btn { background: #28a745; color: white; border: none; padding: 5px 10px; border-radius: 3px; cursor: pointer; font-size: 0.8em; }
+          .download-btn:hover { background: #218838; }
         </style>
         <script>
           function deleteRedirect(id) {
@@ -173,6 +269,16 @@ app.get('/human/browse', (req, res) => {
                 });
             }
           }
+          
+          function downloadQR(id) {
+            // Create a temporary link to trigger download
+            const link = document.createElement('a');
+            link.href = '/download/qr/' + id + '/png';
+            link.download = 'qr-' + id + '.png';
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+          }
         </script>
       </head>
       <body>
@@ -186,6 +292,7 @@ app.get('/human/browse', (req, res) => {
         <table>
           <tr>
             <th>QR Code</th>
+            <th>Short URL</th>
             <th>Destination URL</th>
             <th>Created</th>
             <th>Visits</th>
@@ -200,12 +307,20 @@ app.get('/human/browse', (req, res) => {
         
         html += `
           <tr>
+            <td>
+              <div class="qr-container">
+                <img src="/qr/${row.id}/png" alt="QR Code" class="qr-code" onclick="downloadQR('${row.id}')" title="Click to download QR code">
+              </div>
+            </td>
             <td><span class="qr-link">qr.local/${row.id}</span></td>
             <td><a href="${row.url}" target="_blank">${row.url}</a></td>
             <td class="stats">${created}</td>
             <td class="stats">${row.visits}</td>
             <td class="stats">${lastVisit}</td>
-            <td><button class="delete-btn" onclick="deleteRedirect('${row.id}')">Delete</button></td>
+            <td>
+              <button class="delete-btn" onclick="deleteRedirect('${row.id}')">Delete</button>
+              <button class="download-btn" onclick="downloadQR('${row.id}')">Download QR</button>
+            </td>
           </tr>
         `;
       });
@@ -370,6 +485,109 @@ app.get('/api/check', (req, res) => {
         exists: false,
         message: 'No redirect found for this URL'
       });
+    }
+  });
+});
+
+// QR Code display endpoint (for inline display)
+app.get('/qr/:id/png', async (req, res) => {
+  const { id } = req.params;
+  
+  // Get redirect from database
+  db.get('SELECT * FROM redirects WHERE id = ?', [id.toLowerCase()], async (err, row) => {
+    if (err) {
+      console.error(err);
+      return res.status(500).send('Database error');
+    }
+    
+    if (!row) {
+      return res.status(404).send('Redirect not found');
+    }
+    
+    try {
+      const qrUrl = `qr.local/${row.id}`;
+      const qrCode = await generateQRCode(qrUrl, 'png');
+      
+      // Convert data URL to buffer for PNG
+      const base64Data = qrCode.replace(/^data:image\/png;base64,/, '');
+      const buffer = Buffer.from(base64Data, 'base64');
+      
+      res.setHeader('Content-Type', 'image/png');
+      res.setHeader('Cache-Control', 'public, max-age=86400'); // Cache for 1 day
+      res.send(buffer);
+    } catch (error) {
+      console.error('QR generation error:', error);
+      res.status(500).send('Failed to generate QR code');
+    }
+  });
+});
+
+// QR Code download endpoint - PNG
+app.get('/download/qr/:id/png', async (req, res) => {
+  const { id } = req.params;
+  const format = 'png';
+  
+  // Get redirect from database
+  db.get('SELECT * FROM redirects WHERE id = ?', [id.toLowerCase()], async (err, row) => {
+    if (err) {
+      console.error(err);
+      return res.status(500).json({ error: 'Database error' });
+    }
+    
+    if (!row) {
+      return res.status(404).json({ error: 'Redirect not found' });
+    }
+    
+    try {
+      const qrUrl = `qr.local/${row.id}`;
+      const qrCode = await generateQRCode(qrUrl, format.toLowerCase());
+      
+      if (format.toLowerCase() === 'svg') {
+        res.setHeader('Content-Type', 'image/svg+xml');
+        res.setHeader('Content-Disposition', `attachment; filename="qr-${row.id}.svg"`);
+        res.send(qrCode);
+      } else {
+        // Convert data URL to buffer for PNG
+        const base64Data = qrCode.replace(/^data:image\/png;base64,/, '');
+        const buffer = Buffer.from(base64Data, 'base64');
+        
+        res.setHeader('Content-Type', 'image/png');
+        res.setHeader('Content-Disposition', `attachment; filename="qr-${row.id}.png"`);
+        res.send(buffer);
+      }
+    } catch (error) {
+      console.error('QR generation error:', error);
+      res.status(500).json({ error: 'Failed to generate QR code' });
+    }
+  });
+});
+
+// QR Code download endpoint - SVG
+app.get('/download/qr/:id/svg', async (req, res) => {
+  const { id } = req.params;
+  const format = 'svg';
+  
+  // Get redirect from database
+  db.get('SELECT * FROM redirects WHERE id = ?', [id.toLowerCase()], async (err, row) => {
+    if (err) {
+      console.error(err);
+      return res.status(500).json({ error: 'Database error' });
+    }
+    
+    if (!row) {
+      return res.status(404).json({ error: 'Redirect not found' });
+    }
+    
+    try {
+      const qrUrl = `qr.local/${row.id}`;
+      const qrCode = await generateQRCode(qrUrl, format);
+      
+      res.setHeader('Content-Type', 'image/svg+xml');
+      res.setHeader('Content-Disposition', `attachment; filename="qr-${row.id}.svg"`);
+      res.send(qrCode);
+    } catch (error) {
+      console.error('QR generation error:', error);
+      res.status(500).json({ error: 'Failed to generate QR code' });
     }
   });
 });
