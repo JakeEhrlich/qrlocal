@@ -9,9 +9,9 @@ const port = process.env.PORT || 3000;
 
 // Parse command line arguments
 const args = process.argv.slice(2);
-let maxBase32Length = 7; // Default for QR Version 1 with Q error correction
-let qrErrorCorrection = 'Q'; // Default error correction level
-let qrVersion = null; // Auto-detect version by default
+let maxBase32Length = 6; // Default for QR Version 1 with M error correction
+let qrErrorCorrection = 'M'; // Default error correction level
+let qrVersion = 1; // Default to version 1
 let qrMode = 'alphanumeric'; // Default encoding mode
 
 // Parse arguments
@@ -45,16 +45,16 @@ QR Local - URL Shortener with QR Code Generation
 Usage: node index.js [base32_length] [options]
 
 Arguments:
-  base32_length         Maximum length for base32 IDs (1-20, default: 7)
+  base32_length         Maximum length for base32 IDs (1-20, default: 6)
 
 QR Code Options:
-  -e, --qr-error <L|M|Q|H>     Error correction level (default: Q)
-  -v, --qr-version <1-40>      QR code version (default: auto)
+  -e, --qr-error <L|M|Q|H>     Error correction level (default: M)
+  -v, --qr-version <1-40>      QR code version (default: 1)
   -m, --qr-mode <mode>         Encoding mode: numeric, alphanumeric, byte (default: alphanumeric)
   -h, --help                   Show this help message
 
 Examples:
-  node index.js 7                           # Default settings
+  node index.js 6                           # Default settings
   node index.js 14 -e H -v 2                # Version 2 with high error correction
   node index.js 10 -m byte -e L             # Byte mode with low error correction
     `);
@@ -72,7 +72,7 @@ Examples:
 }
 
 console.log(`Using base32 ID length: ${maxBase32Length} characters`);
-console.log(`QR Code settings: Error correction=${qrErrorCorrection}, Version=${qrVersion || 'auto'}, Mode=${qrMode}`);
+console.log(`QR Code settings: Error correction=${qrErrorCorrection}, Version=${qrVersion}, Mode=${qrMode}`);
 
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
