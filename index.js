@@ -434,7 +434,7 @@ app.post('/api/add', async (req, res) => {
           return res.status(500).json({ error: 'Database error' });
         }
         
-        const qrUrl = `http://${qrDomain}/${id}`;
+        const qrUrl = `HTTP://${qrDomain.toUpperCase()}/${id.toUpperCase()}`;
         
         if (req.headers.accept && req.headers.accept.includes('application/json')) {
           res.json({
@@ -535,7 +535,7 @@ app.get('/qr/:id/png', async (req, res) => {
     }
     
     try {
-      const qrUrl = `http://${qrDomain}/${row.id}`;
+      const qrUrl = `HTTP://${qrDomain.toUpperCase()}/${row.id.toUpperCase()}`;
       const qrCode = await generateQRCode(qrUrl, 'png');
       
       // Convert data URL to buffer for PNG
@@ -569,7 +569,7 @@ app.get('/download/qr/:id/png', async (req, res) => {
     }
     
     try {
-      const qrUrl = `http://${qrDomain}/${row.id}`;
+      const qrUrl = `HTTP://${qrDomain.toUpperCase()}/${row.id.toUpperCase()}`;
       const qrCode = await generateQRCode(qrUrl, format.toLowerCase());
       
       if (format.toLowerCase() === 'svg') {
@@ -609,7 +609,7 @@ app.get('/download/qr/:id/svg', async (req, res) => {
     }
     
     try {
-      const qrUrl = `http://${qrDomain}/${row.id}`;
+      const qrUrl = `HTTP://${qrDomain.toUpperCase()}/${row.id.toUpperCase()}`;
       const qrCode = await generateQRCode(qrUrl, format);
       
       res.setHeader('Content-Type', 'image/svg+xml');
@@ -659,7 +659,7 @@ app.delete('/api/delete/:id', (req, res) => {
 
 console.log(`Starting server on port ${port}...`);
 app.listen(port, () => {
-  console.log(`✓ QR Local server running at http://localhost:${port}`);
-  console.log(`Add redirects at: http://localhost:${port}/human/add`);
-  console.log(`Browse redirects at: http://localhost:${port}/human/browse`);
+  console.log(`✓ QR Local server running at http://${qrDomain}:${port}`);
+  console.log(`Add redirects at: http://${qrDomain}:${port}/human/add`);
+  console.log(`Browse redirects at: http://${qrDomain}:${port}/human/browse`);
 });
